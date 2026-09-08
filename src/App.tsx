@@ -52,7 +52,7 @@ export default function App() {
           {visible.map(char => <article className="character" key={char.id} draggable onDragStart={()=>setDragged(char.id)} onDragOver={e=>e.preventDefault()} onDrop={()=>dropOn(char.id)} style={{height:char.height*2.7}}>
             <div className="char-tools"><button title="순서 이동"><GripVertical size={15}/></button><button onClick={()=>{setEditing(char);setModal(true)}}>수정</button><button title="삭제" onClick={()=>remove(char.id)}><X size={14}/></button></div>
             <div className="char-label"><b>{char.name}</b><span>{char.height} cm</span></div>
-            {char.image ? <img src={char.image} style={{height:`${100/(char.top-char.bottom)*100}%`, bottom:`${-char.bottom/(char.top-char.bottom)*100}%`}}/> : <div className="silhouette" style={{'--tone':char.color} as React.CSSProperties}><i/><span/><b/><em/></div>}
+            {char.image ? <img src={char.image} style={{height:`${100/(char.top-char.bottom)*100}%`, bottom:`${-char.bottom/(char.top-char.bottom)*100}%`}}/> : <HumanSilhouette color={char.color}/>}
           </article>)}
           {!characters.length && <div className="empty"><ImagePlus size={32}/><h3>첫 캐릭터를 등록해 보세요</h3><p>PNG, JPG, WEBP 이미지를 사용할 수 있어요.</p><button className="primary" onClick={()=>setModal(true)}><Plus size={18}/> 캐릭터 추가</button></div>}
           <div className="ground"><span>GROUND · 0 CM</span></div>
@@ -66,14 +66,39 @@ export default function App() {
   </div>
 }
 
+function HumanSilhouette({color}:{color:string}) {
+  return <svg className="silhouette" viewBox="0 0 150 500" preserveAspectRatio="xMidYMax meet" style={{'--tone':color} as React.CSSProperties} aria-label="기본 사람 실루엣" role="img">
+    <path d="M75 2c-22 0-38 18-38 43 0 20 8 39 20 48l-3 17c-21 7-35 19-40 42L2 246c-2 16 8 26 19 23l13-84 3 105-11 178c-1 18 7 29 20 29 11 0 18-7 20-24l9-129 9 129c2 17 9 24 20 24 13 0 21-11 20-29l-11-178 3-105 13 84c11 3 21-7 19-23l-12-94c-5-23-19-35-40-42l-3-17c12-9 20-28 20-48C113 20 97 2 75 2Z"/>
+  </svg>
+}
+
 function CharacterModal({initial, order, onClose, onSave}:{initial:Character|null,order:number,onClose:()=>void,onSave:(c:Character)=>void}) {
   const [name,setName]=useState(initial?.name||''); const [height,setHeight]=useState(initial?.height||170); const [image,setImage]=useState(initial?.image||''); const [bottom,setBottom]=useState(initial?.bottom||0); const [top,setTop]=useState(initial?.top||100)
   const fileRef=useRef<HTMLInputElement>(null)
-  const upload=async(file?:File)=>{if(file) setImage(await fileToData(file))}
+  const upload=async(file?:File)=>{if(file) { setImage(await fileToData(file)); setBottom(0); setTop(100) }}
   return <div className="overlay" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><div className="modal"><div className="modal-head"><div><span>CHARACTER PROFILE</span><h2>{initial?'캐릭터 수정':'새 캐릭터 추가'}</h2></div><button className="icon-btn" onClick={onClose}><X/></button></div>
-    <div className="form-grid"><div className="upload-panel" onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();upload(e.dataTransfer.files[0])}}>{image?<img src={image}/>:<><div><Upload/></div><b>이미지를 놓거나 클릭하세요</b><span>PNG, JPG, WEBP · 최대 10MB</span></>}<input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>upload(e.target.files?.[0])}/></div>
+    <div className="form-grid"><div className={`upload-panel ${image?'has-image':''}`} onClick={()=>!image&&fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();upload(e.dataTransfer.files[0])}}>{image?<AnchorEditor image={image} top={top} bottom={bottom} onTop={setTop} onBottom={setBottom} onReplace={()=>fileRef.current?.click()}/>:<><div><Upload/></div><b>이미지를 놓거나 클릭하세요</b><span>PNG, JPG, WEBP · 최대 10MB</span></>}<input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>upload(e.target.files?.[0])}/></div>
       <div className="fields"><label>캐릭터 이름<input value={name} onChange={e=>setName(e.target.value)} placeholder="예: 아리아" maxLength={24}/></label><label>키 <div className="height-input"><input type="number" min="20" max="400" value={height} onChange={e=>setHeight(Number(e.target.value))}/><span>cm</span></div></label>
       <div className="anchor-title"><b>이미지 기준점</b><span>투명 여백이 있다면 조정하세요</span></div><label className="range"><span>위 기준점 <b>{top}%</b></span><input type="range" min={bottom+10} max="100" value={top} onChange={e=>setTop(Number(e.target.value))}/></label><label className="range"><span>아래 기준점 <b>{bottom}%</b></span><input type="range" min="0" max={top-10} value={bottom} onChange={e=>setBottom(Number(e.target.value))}/></label></div></div>
     <div className="modal-foot"><button className="cancel" onClick={onClose}>취소</button><button className="primary" disabled={!name.trim()||!height} onClick={()=>onSave({id:initial?.id||crypto.randomUUID(),name:name.trim(),height,image,bottom,top,color:initial?.color||colors[order%colors.length],order:initial?.order??order,createdAt:initial?.createdAt||Date.now()})}>{initial?'변경 저장':'비교에 추가'}</button></div>
   </div></div>
+}
+
+function AnchorEditor({image,top,bottom,onTop,onBottom,onReplace}:{image:string,top:number,bottom:number,onTop:(value:number)=>void,onBottom:(value:number)=>void,onReplace:()=>void}) {
+  const preview=useRef<HTMLDivElement>(null)
+  const move=(kind:'top'|'bottom',clientY:number)=>{
+    const rect=preview.current?.getBoundingClientRect(); if(!rect) return
+    const value=Math.round(100-(clientY-rect.top)/rect.height*100)
+    if(kind==='top') onTop(Math.max(bottom+10,Math.min(100,value)))
+    else onBottom(Math.max(0,Math.min(top-10,value)))
+  }
+  const start=(kind:'top'|'bottom',e:React.PointerEvent<HTMLButtonElement>)=>{
+    e.preventDefault(); e.stopPropagation(); e.currentTarget.setPointerCapture(e.pointerId); move(kind,e.clientY)
+  }
+  return <div className="anchor-preview" ref={preview}>
+    <img src={image} alt="캐릭터 기준점 미리보기" draggable={false}/>
+    {(['top','bottom'] as const).map(kind=><button key={kind} type="button" className={`anchor-line ${kind}`} style={{top:`${100-(kind==='top'?top:bottom)}%`}} onPointerDown={e=>start(kind,e)} onPointerMove={e=>e.currentTarget.hasPointerCapture(e.pointerId)&&move(kind,e.clientY)} onClick={e=>e.stopPropagation()} aria-label={`${kind==='top'?'위':'아래'} 기준점: ${kind==='top'?top:bottom}%`}><span>{kind==='top'?'위':'아래'} 기준점</span><b>{kind==='top'?top:bottom}%</b></button>)}
+    <div className="anchor-help">선을 위아래로 드래그해 기준점을 맞추세요</div>
+    <button type="button" className="replace-image" onClick={e=>{e.stopPropagation();onReplace()}}><Upload size={13}/> 이미지 교체</button>
+  </div>
 }
